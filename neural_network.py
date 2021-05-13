@@ -10,12 +10,12 @@ from game import Snake
 
 
 class NeuralNet:
-    def __init__(self, init_games=10000, test_games=500, goal_steps=5000, lr=1e-2, filename='model'):
+    def __init__(self, init_games=10000, test_games=500, goal_steps=5000, lr=1e-2, model_path='models/model'):
         self.init_games = init_games
         self.test_games = test_games
         self.goal_steps = goal_steps
         self.lr = lr
-        self.filename = filename
+        self.model_path = model_path
         self.model = None
         self.vectors_and_keys = [
             [[-10, 0], 0],
@@ -115,7 +115,7 @@ class NeuralNet:
         return np.append([action], observation)
 
     def get_model(self):
-        network = input_data(shape=[None, 5, 1], name='input')
+        network = input_data(shape=[None, 5], name='input')
         network = fully_connected(network, 32, activation='relu')
         network = fully_connected(network, 1, activation='linear')
         # acu = tflearn.metrics.Accuracy()
@@ -124,10 +124,20 @@ class NeuralNet:
         return model
 
     def train_model(self, training_data):
-        X = np.array([i[0] for i in training_data]).reshape(-1, 5, 1)
+        x = np.array([i[0] for i in training_data]).reshape(-1, 5)
         y = np.array([i[1] for i in training_data]).reshape(-1, 1)
-        self.model.fit(X, y, n_epoch=3, shuffle=True, run_id=self.filename)
-        self.model.save(self.filename)
+        self.model.fit(x, y, n_epoch=3, shuffle=True, run_id=self.model_path)
+        self.model.save(self.model_path)
+
+    def _play(self, game, snake, prev_observation):
+        predictions = []
+        for action in range(-1, 2):
+            predictions.append(
+                self.model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5)))
+        action = np.argmax(np.array(predictions))
+        game_action = self.get_game_action(snake, action - 1)
+        done, score, snake, food = game.move(game_action)
+        return done, score, snake, food, action, predictions
 
     def test_model(self):
         steps_arr = []
@@ -139,23 +149,12 @@ class NeuralNet:
             _, score, snake, food = game.start()
             prev_observation = self.generate_observation(snake, food)
             for _ in range(self.goal_steps):
-                predictions = []
-                for action in range(-1, 2):
-                    predictions.append(
-                        self.model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5, 1)))
-                action = np.argmax(np.array(predictions))
-                game_action = self.get_game_action(snake, action - 1)
-                done, score, snake, food = game.move(game_action)
+                done, score, snake, food, action, predictions = self._play(game, snake, prev_observation)
                 game_memory.append([prev_observation, action])
                 if done:
                     result_string = steps + snake + food + prev_observation + predictions
                     print('-----')
                     print('Game Test', a)
-                    # print(steps)
-                    # print(snake)
-                    # print(food)
-                    # print(prev_observation)
-                    # print(predictions)
                     print(result_string)
                     with open("testing.txt", "a") as file:
                         file.write(f'Test {a}\n {result_string}')
@@ -180,14 +179,7 @@ class NeuralNet:
             _, score, snake, food = game.start()
             prev_observation = self.generate_observation(snake, food)
             for _ in range(self.goal_steps):
-                predictions = []
-                for action in range(-1, 2):
-                    predictions.append(
-                        self.model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5, 1)))
-                action = np.argmax(np.array(predictions))
-                game_action = self.get_game_action(snake, action - 1)
-                done, _, snake, food = game.move(game_action)
-
+                done, score, snake, food, action, predictions = self._play(game, snake, prev_observation)
                 if done:
                     break
                 else:
@@ -202,17 +194,18 @@ class NeuralNet:
     def visualise(self):
         if self.model is None:
             self.model = self.get_model()
-            self.model.load(self.filename)
+            self.model.load(self.model_path)
         self.visualise_game()
 
     def test(self):
         if self.model is None:
             self.model = self.get_model()
-            self.model.load(self.filename)
+            self.model.load(self.model_path)
         self.test_model()
 
 
 if __name__ == "__main__":
-    NeuralNet().train()
-    # NeuralNet().test()
-    # NeuralNet().visualise()
+    neural_net = NeuralNet()
+    neural_net.train()
+    # neural_net.test()
+    # neural_net.visualise()
