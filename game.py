@@ -6,6 +6,7 @@ from util import roundup
 class Snake:
     def __init__(self, height=500, width=500, is_gui=False):
         """Initialize Components"""
+        self.snake = []
         self.score = 0
         self.board = {'height': height, 'width': width}
         self.done = True
@@ -15,12 +16,12 @@ class Snake:
         self.window = pygame.display.set_mode((self.board['width'] + 20, self.board['height'] + 20))
         self.snake_steps = 10
         self.score_height = 25
+        self.is_game_over = False
 
     def init_snake(self):
         """Initialize the snake"""
         x = roundup(randint(5, self.board["width"] - 5))
         y = roundup(randint(5, self.board["height"] - 5))
-        self.snake = []
         orientation = randint(0, 1)
         horizontal = orientation == 0
         init_length = 3
@@ -36,7 +37,7 @@ class Snake:
     def create_food(self):
         """Generate food"""
         food = []
-        while food == []:
+        while not food:
             x = roundup(randint(10, self.board['width']))
             y = roundup(randint(10, self.board['height']))
             # food = [randint(1, self.board['width']), randint(1, self.board['height'])]
@@ -49,14 +50,14 @@ class Snake:
     def init_rendering(self):
         """Initialize the game rendering process"""
         pygame.init()
-        pygame.display.set_caption("Snake Game")
+        pygame.display.set_caption("AI Snake")
         self.render()
 
     def render(self):
         """Rendering the frames"""
         pygame.font.init()
         self.window.fill((0, 0, 0))
-        b = '\U0001F600'
+        # b = '\U0001F600'
         header_font = pygame.font.SysFont('Comic Sans MS', 18)
         normal_font = pygame.font.SysFont('Courier New', 15)
 
@@ -83,21 +84,21 @@ class Snake:
         # 1 - RIGHT
         # 2 - DOWN
         # 3 - LEFT
+        if not self.is_game_over:
+            self.create_new_frame(key)
+            if self.food_eaten():
+                self.score += 1
+                self.create_food()
+            else:
+                self.remove_last_frame()
 
-        self.create_new_frame(key)
-        if self.food_eaten():
-            self.score += 1
-            self.create_food()
-        else:
-            self.remove_last_frame()
-
-        if self.is_gui:
-            pygame.time.wait(100)
-            self.render()
-        self.check_collisions()
-        if self.done == True:
-            self.end_game()
-        return self.generate_observations()
+            if self.is_gui:
+                pygame.time.wait(100)
+                self.render()
+            self.check_collisions()
+            if self.done:
+                self.end_game()
+            return self.generate_observations()
 
     def generate_observations(self):
         return self.done, self.score, self.snake, self.food
@@ -114,7 +115,9 @@ class Snake:
         """End the Game"""
         if self.is_gui:
             self.destroy_rendering()
-            raise Exception("Game Over")
+            # raise Exception("Game Over")
+            self.is_game_over = True
+            print("Game Over!")
 
     def create_new_frame(self, key):
         new_point = [self.snake[0][0], self.snake[0][1]]
@@ -154,6 +157,9 @@ if __name__ == "__main__":
     game.start()
     run = True
     while run:
+        if game.is_game_over:
+            break
+
         pygame.time.delay(100)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -161,18 +167,20 @@ if __name__ == "__main__":
 
         keys = pygame.key.get_pressed()
 
-        # if keys[pygame.K_LEFT]:
-        #     game.move(3)
-        # if keys[pygame.K_RIGHT]:
-        #     game.move(1)
-        #
-        # if keys[pygame.K_UP]:
-        #     game.move(0)
-        #
-        # if keys[pygame.K_DOWN]:
-        #     game.move(2)
+        #  To move the snake using arrow keys
+        if keys[pygame.K_LEFT]:
+            game.move(3)
+        if keys[pygame.K_RIGHT]:
+            game.move(1)
 
-        for _ in range(20):
-            game.move(randint(0, 3))
+        if keys[pygame.K_UP]:
+            game.move(0)
+
+        if keys[pygame.K_DOWN]:
+            game.move(2)
+
+        # # automatic movement
+        # for _ in range(20):
+        #     game.move(randint(0, 3))
 
     pygame.quit()
