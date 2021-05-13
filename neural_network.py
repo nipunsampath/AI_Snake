@@ -16,6 +16,7 @@ class NeuralNet:
         self.goal_steps = goal_steps
         self.lr = lr
         self.filename = filename
+        self.model = None
         self.vectors_and_keys = [
             [[-10, 0], 0],
             [[0, 10], 1],
@@ -28,7 +29,6 @@ class NeuralNet:
         for i in range(self.init_games):
             print("Training Game:", i + 1)
             game = Snake()
-            self.board = game.board
             _, prev_score, snake, food = game.start()
             prev_observation = self.generate_observation(snake, food)
             prev_food_distance = self.get_food_distance(snake, food)
@@ -61,23 +61,29 @@ class NeuralNet:
         angle = self.get_angle(snake_direction, food_direction)
         return np.array([int(barrier_left), int(barrier_front), int(barrier_right), angle])
 
-    def get_snake_direction_vector(self, snake):
+    @staticmethod
+    def get_snake_direction_vector(snake):
         return np.array(snake[0]) - np.array(snake[1])
 
-    def get_food_direction_vector(self, snake, food):
+    @staticmethod
+    def get_food_direction_vector(snake, food):
         return np.array(food) - np.array(snake[0])
 
-    def is_direction_blocked(self, snake, direction):
+    @staticmethod
+    def is_direction_blocked(snake, direction):
         point = np.array(snake[0]) + np.array(direction)
         return point.tolist() in snake[:] or point[0] == 0 or point[1] == 0 or point[0] == 501 or point[1] == 501
 
-    def turn_vector_to_the_left(self, vector):
+    @staticmethod
+    def turn_vector_to_the_left(vector):
         return np.array([-vector[1], vector[0]])
 
-    def turn_vector_to_the_right(self, vector):
+    @staticmethod
+    def turn_vector_to_the_right(vector):
         return np.array([vector[1], -vector[0]])
 
-    def normalize_vector(self, vector):
+    @staticmethod
+    def normalize_vector(vector):
         return vector / np.linalg.norm(vector)
 
     def get_food_distance(self, snake, food):
@@ -104,26 +110,26 @@ class NeuralNet:
         b = self.normalize_vector(b)
         return math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]) / math.pi
 
-    def add_action_to_observation(self, observation, action):
+    @staticmethod
+    def add_action_to_observation(observation, action):
         return np.append([action], observation)
 
-    def model(self):
+    def get_model(self):
         network = input_data(shape=[None, 5, 1], name='input')
         network = fully_connected(network, 32, activation='relu')
         network = fully_connected(network, 1, activation='linear')
-        acu = tflearn.metrics.Accuracy()
+        # acu = tflearn.metrics.Accuracy()
         network = regression(network, optimizer='adam', learning_rate=self.lr, loss='mean_square', name='target')
         model = tflearn.DNN(network, tensorboard_dir='log')
         return model
 
-    def train_model(self, training_data, model):
+    def train_model(self, training_data):
         X = np.array([i[0] for i in training_data]).reshape(-1, 5, 1)
         y = np.array([i[1] for i in training_data]).reshape(-1, 1)
-        model.fit(X, y, n_epoch=3, shuffle=True, run_id=self.filename)
-        model.save(self.filename)
-        return model
+        self.model.fit(X, y, n_epoch=3, shuffle=True, run_id=self.filename)
+        self.model.save(self.filename)
 
-    def test_model(self, model):
+    def test_model(self):
         steps_arr = []
         scores_arr = []
         for a in range(self.test_games):
@@ -136,7 +142,7 @@ class NeuralNet:
                 predictions = []
                 for action in range(-1, 2):
                     predictions.append(
-                        model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5, 1)))
+                        self.model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5, 1)))
                 action = np.argmax(np.array(predictions))
                 game_action = self.get_game_action(snake, action - 1)
                 done, score, snake, food = game.move(game_action)
@@ -152,7 +158,7 @@ class NeuralNet:
                     # print(predictions)
                     print(result_string)
                     with open("testing.txt", "a") as file:
-                        file.write('Test ' + a + '\n' + result_string)
+                        file.write(f'Test {a}\n {result_string}')
                     break
                 else:
                     prev_observation = self.generate_observation(snake, food)
@@ -168,7 +174,7 @@ class NeuralNet:
         with open("Stats.txt", "a") as file:
             file.write(step_str + "  ----------  " + score_str + "\n")
 
-    def visualise_game(self, model):
+    def visualise_game(self):
         while True:
             game = Snake(is_gui=True)
             _, score, snake, food = game.start()
@@ -177,7 +183,7 @@ class NeuralNet:
                 predictions = []
                 for action in range(-1, 2):
                     predictions.append(
-                        model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5, 1)))
+                        self.model.predict(self.add_action_to_observation(prev_observation, action).reshape(-1, 5, 1)))
                 action = np.argmax(np.array(predictions))
                 game_action = self.get_game_action(snake, action - 1)
                 done, _, snake, food = game.move(game_action)
@@ -189,21 +195,24 @@ class NeuralNet:
 
     def train(self):
         training_data = self.initial_population()
-        nn_model = self.model()
-        nn_model = self.train_model(training_data, nn_model)
+        if self.model is None:
+            self.model = self.get_model()
+        self.train_model(training_data)
 
     def visualise(self):
-        nn_model = self.model()
-        nn_model.load(self.filename)
-        self.visualise_game(nn_model)
+        if self.model is None:
+            self.model = self.get_model()
+            self.model.load(self.filename)
+        self.visualise_game()
 
     def test(self):
-        nn_model = self.model()
-        nn_model.load(self.filename)
-        self.test_model(nn_model)
+        if self.model is None:
+            self.model = self.get_model()
+            self.model.load(self.filename)
+        self.test_model()
 
 
 if __name__ == "__main__":
     NeuralNet().train()
-    #NeuralNet().test()
-    #NeuralNet().visualise()
+    # NeuralNet().test()
+    # NeuralNet().visualise()
