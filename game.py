@@ -1,6 +1,10 @@
+import math
 from random import randint
 import pygame
-from util import roundup
+
+
+def roundup(x):
+    return int(math.ceil(x / 10.0)) * 10
 
 
 class Snake:
